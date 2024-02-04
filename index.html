@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title> Movian's Opensubtitle Plugin</title>
+  <style>
+body{align-items:center;background-color:#f4f4f4;display:flex;font-family:Arial,sans-serif;height:100vh;justify-content:center;margin:0}div{background-color:#fff;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.1);max-width:350px;padding:20px}label{color:#333;display:block;font-size:12px;margin-bottom:4px}button,input{border-radius:4px}input{border:1px solid #ccc;box-sizing:border-box;margin-bottom:16px;padding:8px;width:100%}button{background-color:#4caf50;border:0;color:#fff;cursor:pointer;font-size:16px;padding:10px;width:-webkit-fill-available;margin:10px}button:hover{background-color:#45a049}a{padding:4px; font-size:16px;}
+  </style>
+</head>
+
+<body>
+
+  <div>
+    <div>
+      <label for="usernameInput">Username <a href="https://opensubtitles.com" target="_blank">↗</a></label>
+      <input type="text" id="usernameInput" placeholder="Username from opensubtitles.com">
+      <label for="passwordInput">Password <a href="https://opensubtitles.com" target="_blank">↗</a></label>
+      <input type="password" id="passwordInput" placeholder="Password from opensubtitles.com">
+      <label for="apiKeyInput">API Key <a href="https://opensubtitles.com/en/consumers" target="_blank">↗</a></label>
+      <input type="text" id="apiKeyInput" placeholder="API Key from opensubtitles.com/en/consumers">
+ 
+      <button onclick="createModifiedZip()">Download Opensubtitle Plugin</button>
+    </div>
+
+  </div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.5/jszip.min.js"></script>
+  <script>
+    async function createModifiedZip() {
+      // Get the values from the input fields
+      const apiKey = document.getElementById('apiKeyInput').value;
+      const username = document.getElementById('usernameInput').value;
+      const password = document.getElementById('passwordInput').value;
+      // URL of the opensubtitles.js file
+      const opensubtitlesUrl = 'https://arkyup.github.io/Movian-plugin-opensubtitles/opensubtitles.js';
+      // Fetch the opensubtitles.js file
+      const opensubtitlesResponse = await fetch(opensubtitlesUrl);
+      const opensubtitlesContent = await opensubtitlesResponse.text();
+      // Create a JSZip instance
+      const zip = new JSZip();
+      // Add modified opensubtitles.js to the zip
+      const modifiedContent = opensubtitlesContent
+        .replace(/var apikey = '';/, `var apikey = '${apiKey}';`)
+        .replace(/var username = '';/, `var username = '${username}';`)
+        .replace(/var password = '';/, `var password = '${password}';`);
+      zip.file('opensubtitles.js', modifiedContent);
+      // Add unmodified files to the zip
+      const filesToAdd = [{
+          url: 'https://arkyup.github.io/Movian-plugin-opensubtitles/logo.jpg',
+          name: 'logo.jpg'
+        },
+        {
+          url: 'https://arkyup.github.io/Movian-plugin-opensubtitles/os.png',
+          name: 'os.png'
+        },
+        {
+          url: 'https://arkyup.github.io/Movian-plugin-opensubtitles/plugin.json',
+          name: 'plugin.json'
+        },
+      ];
+      for (const file of filesToAdd) {
+        const response = await fetch(file.url);
+        const content = await response.blob();
+        zip.file(file.name, content);
+      }
+      // Generate the modified zip file
+      const modifiedZip = await zip.generateAsync({
+        type: 'blob'
+      });
+      // Download the modified zip file
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(modifiedZip);
+      downloadLink.download = `${username ? username : 'Movian'} - Opensubtitle Plugin`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+  </script>
+</body>
+
+</html>
