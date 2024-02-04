@@ -21,11 +21,14 @@ var settings = require('showtime/settings');
 var subtitles = require('showtime/subtitles');
 var xmlrpc = require('showtime/xmlrpc');
 var popup = require('native/popup');
-
-var APIURL = "https://api.opensubtitles.org/xml-rpc";
+var http = require('movian/http');
+var APIURL = "https://api.opensubtitles.com/api/v1/";
+var string = require('native/string');
+var io = require('native/io');
 var token = null;
-var usernname = '';
+var username = '';
 var password = '';
+var apikey = '';
 
 var logo = Plugin.path + "logo.jpg";
 
@@ -38,48 +41,94 @@ var sg = new settings.globalSettings("opensubtitles",
                                      logo,
                                      "Login details for opensubtitles");
 
-sg.createString("username", "Username", "", function(v) {
+sg.createString("username", "username (dont fill if using api key)", "", function(v) {
   username = v;
   token = null;
 });
 
-sg.createString("password", "Password", "", function(v) {
+sg.createString("password", "password", "", function(v) {
   password = v;
   token = null;
 });
+sg.createString("apikey", "apikey from opensubtitles.com", "", function(v) {
+  apikey = v;
+  token = null;
+});
+
+function getsubtitle(id){
+
+  var r = [];
+    
+    try {
+      var r = JSON.parse(http.request(APIURL +'download', { 
+    
+      method: "POST",
+         //debug: service.debug,
+         headers: { 'User-Agent' : "Movian Android 7.0.23", 'Connection': 'keep-alive',
+        'Content-Type': ' application/json',
+        'Accept':  'application/json',
+       // 'Authorization': 'Bearer '+token, to be use if username password are being used
+        'Api-Key': apikey
+
+      },
+      postdata: JSON.stringify({"file_id":id})
+   }))
+    } catch(err) {
+      trace("Cannot send login to opensubtitles: " + err);
+
+    //  if(force) popup.notify('Opensubtitles login failed: ' + err, 5, logo);
+       
+      return;
+    }
+
+    var url = r.link;
+    //console.log(url)
+    return url;
+}
 
 function login(force) {
 
   if(token === null || force) {
     trace('Attempting to login as: ' + (username ? username : 'Anonymous'));
 
-    var r;
+    var r = [];
+    
     try {
-      var r = xmlrpc.call(APIURL, "LogIn", username, password, 'en',
-			  'Showtime ' + Core.currentVersionString);
+      var r = JSON.parse(http.request(APIURL +'login', { 
+    
+      method: "POST",
+         //debug: service.debug,
+         headers: { 'User-Agent' : "Movian Android 7.0.23", 'Connection': 'keep-alive',
+        'Content-Type': ' application/json',
+        'Accept':  'application/json',
+        'Api-Key': apikey
+
+      },
+      postdata:  JSON.stringify({"username":username,"password":password})
+   }))
     } catch(err) {
       trace("Cannot send login to opensubtitles: " + err);
 
       if(force)
-        popup.notify('Opensubtitles login failel: ' + err, 5, logo);
+        popup.notify('Opensubtitles login failed: ' + err, 5, logo);
       return;
     }
-
-    if(r[0].status == '200 OK') {
-      token = r[0].token;
+ 
+    if(r.status == 200) {
+      token = r.token;
       trace('Login OK');
     } else {
       token = null;
-      trace('Login failed: ' + r[0].status);
+      trace('Login failed: ' + r.status);
       if(force)
-        popup.notify('Opensubtitles login failed: ' + r[0].status, 5, logo);
+        popup.notify('Opensubtitles login failed: ' + r.status, 5, logo);
     }
   }
 }
 
 
 new subtitles.addProvider(function(req) {
-
+  console.log(req.imdb)
   var queries = [];
 
   if(req.duration < 5 * 60)
@@ -87,10 +136,11 @@ new subtitles.addProvider(function(req) {
 
   // Get list of user preferred languages for subs
   var lang = subtitles.getLanguages().join(',');
-
+  //var lang = 'en';
   // Build a opensubtitle query based on request from Movian
 
   if(req.filesize > 0 && req.opensubhash !== undefined) {
+
     queries.push({
       sublanguageid: lang,
       moviehash: req.opensubhash,
@@ -100,16 +150,19 @@ new subtitles.addProvider(function(req) {
   if(req.imdb && req.imdb.indexOf('tt') == 0) {
     queries.push({
       sublanguageid: lang,
-      imdbid: req.imdb.substring(2),
-      season: req.season,
-      episode: req.episode
+      imdb_id: req.imdb.substring(2)
+      
     });
   } else if(req.title) {
+
     queries.push({
+
+      
       sublanguageid: lang,
-      query: req.title,
-      season: req.season,
-      episode: req.episode
+      query: req.title.replace(/\s+/g, "+"),
+      season_number: req.season,
+      episode_number: req.episode
+    
     });
   }
 
@@ -117,33 +170,37 @@ new subtitles.addProvider(function(req) {
   // This typically happens if the token times out
 
   for(var retry = 0; retry < 2; retry++) {
-    login(retry);
+   // login(retry); we are using hardcode api and dont know how to get api key from url hence skipping 
+    //trace(token)
 
-    var r;
+    var r = [];
     try {
-      r = xmlrpc.call(APIURL, "SearchSubtitles", token, queries);
+      var r = JSON.parse(http.request(APIURL +'subtitles', { 
+        args: queries,
+          method: "GET",
+         //debug: service.debug,
+         headers: { 'User-Agent' : "Movian Android 7.0.23", 'Connection': 'keep-alive',
+        'Content-Type': ' application/json',
+        'Accept':  'application/json',
+        'Api-Key': apikey
+
+      },
+   
+   }))
     } catch(err) {
       trace("Cannot send search query to opensubtitles: " + err);
       return;
     }
+
     
-    if(r[0].status == '200 OK' && typeof(r[0].data == 'object')) {
       var set = {}; // We can get same subtitle multiple times, so keep track
       var cnt = 0;
-      var len = r[0].data.length;
+      var len = r.data.length;
       for(var i = 0; i < len; i++) {
-	var sub = r[0].data[i];
-	var url = sub.SubDownloadLink;
-        if(sub.MatchedBy == 'fulltext' && sub.subLastTS) {
-          var a = sub.SubLastTS.split(':');
-          if(a.length == 3) {
-            var seconds = (+a[0]) * 3600 + (+a[1]) * 60 + (+a[2]);
-            if(seconds < 30000 && seconds > req.duration * 1.1) {
-              //                console.log("Skipping " + url + " " + seconds + "(" +  sub.SubLastTS + ") > " + req.duration * 1.1);
-              continue;
-            }
-          }
-        }
+	var sub = r.data[i];
+ // console.log (sub.attributes.language)
+	var url = sub.attributes.files[0].file_id;
+  //console.log (sub.attributes.files[0].file_id)
 
 	if(url in set)
 	  continue;
@@ -151,26 +208,29 @@ new subtitles.addProvider(function(req) {
 	set[url] = true;
 
 	var score = 0;
-	if (sub.MatchedBy == 'moviehash')
-	  score++; // matches by file hash is better
+	 if (sub.moviehash_match == 'true')
+	 score++; // matches by file hash is better
 
-        if ((req.season == sub.SeriesSeason) && (req.episode == sub.SeriesEpisode))
-          score += 2; // matches by season and episode is even better
+       // if ((req.season == sub.attributes.season_number) && (req.episode == attributes.episode_number)) score += 2; // matches by season and episode is even better
+       
 
-        var localurl = "opensubtitlefs://" + url.replace(/\/sid-[^\/]+\//, '/__SID_TOKEN__/')
+       // var localurl = "opensubtitlefs://" + url.replace(/\/sid-[^\/]+\//, '/__SID_TOKEN__/')
+        var localurl = "opensubtitlefs://" + url
 
-	req.addSubtitle(localurl, sub.SubFileName, sub.SubLanguageID,
-			sub.SubFormat,
-			'opensubtitles (' + sub.MatchedBy + ')',
+	req.addSubtitle(localurl, sub.attributes.files[0].file_name, sub.attributes.language,
+			'srt',
+			'opensubtitles (' + sub.attributes.language + ')',
 			score);
 	cnt++;
       }
       trace('Added ' + cnt + ' subtitles');
 
       return;
-    } else {
-      trace('Query failed: ' + r[0].status);
-    }
+ 
+    
+    
+    
+   
   }
 });
 
@@ -181,23 +241,14 @@ var fap = require('native/faprovider');
 fap.register('opensubtitlefs', {
 
   redirect: function(handle, url) {
-    console.log("Redirect: " + url);
+    //console.log("Redirect: " + url);
 
     for(var retry = 0; retry < 2; retry++) {
       // Verify that our token is still valid
-      login(retry);
-
-      r = xmlrpc.call(APIURL, "NoOperation", token);
-      if(r[0].status == '200 OK') {
-
-        var realurl = url.replace(/__SID_TOKEN__/, 'sid-' + token);
-        console.log("Redirecting " + url + " to " + realurl);
-
-        fap.redirectRespond(handle, true, realurl);
-        return;
-      }
+     // login(retry);
+      fap.redirectRespond(handle, true, getsubtitle(url)); 
+      
     }
     fap.redirectRespond(handle, false, 'Unable to access opensubtitles');
   }
 });
-

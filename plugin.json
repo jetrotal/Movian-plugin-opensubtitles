@@ -5,11 +5,11 @@
   "category": "subtitles",
   "showtimeVersion": "5.0.401",
   "apiversion": 2,
-  "version": "2.3.3",
-  "author": "Andreas Smas",
+  "version": "2.3.4",
+  "author": "Andreas Smas (Fixed his old code for new API by Superfan)",
   "title": "Opensubtitles",
-  "icon": "logo.jpg",
-  "synopsis": "Biggest multi-language subtitle database",
-  "homepage":"http://www.opensubtitles.org/",
-  "description":"Installing this plugin will make Movian automatically search for subtitles online at opensubtitles.org when playing a movie"
+  "icon": "os.png",
+  "synopsis": "Based on new API. Biggest multi-language subtitle database",
+  "homepage":"http://www.opensubtitles.com/",
+  "description":"Based on new API. Get your API KEY from opensubtitles.com and put in settings.  Installing this plugin will make Movian automatically search for subtitles online at opensubtitles.org when playing a movie"
 }
